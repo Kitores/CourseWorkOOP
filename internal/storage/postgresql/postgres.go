@@ -24,15 +24,16 @@ var (
 	pgOnce     sync.Once
 )
 
-func (pg *PostgresSqlx) CheckDateTimeDB(date types.Date) (error, bool) {
+func (pg *PostgresSqlx) CheckDateTimeDB(date time.Time) (error, bool) {
 	var exists bool
 	const funcName = "/internal/storage/postgresql/CheckDateTime"
 
-	dateValue := time.Date(date.Year, time.Month(date.Month), date.Day, date.Hours, date.Minutes, date.Seconds, 0, time.Local) // Преобразуйте в time.Time
-	fmt.Println(dateValue.Format("2006-01-02 15:04:05"))
-	query := `SELECT EXISTS (SELECT 1 FROM appointments WHERE event_time = $1)`
-
-	_ = pg.db.QueryRow(query, dateValue).Scan(&exists)
+	dateValue := time.Date(date.Year(), date.Month(), date.Day(), date.Hour(), date.Minute(), date.Second(), 0, time.Local) // Преобразуйте в time.Time
+	fmt.Println(dateValue.Format("'2006-01-02 15:04:05'"))
+	query := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM appointments WHERE event_time BETWEEN TIMESTAMP '%s' - INTERVAL '1 hour' AND TIMESTAMP '%s' + INTERVAL '1 hour');`, dateValue.Format("2006-01-02 15:04:05"), dateValue.Format("2006-01-02 15:04:05"))
+	//query := `SELECT EXISTS(SELECT 1 FROM appointments WHERE event_time BETWEEN TIMESTAMP $1 - INTERVAL '1 hour' AND TIMESTAMP $1 + INTERVAL '1 hour');`
+	fmt.Println(query)
+	_ = pg.db.QueryRow(query).Scan(&exists)
 
 	fmt.Println(exists)
 	return nil, exists

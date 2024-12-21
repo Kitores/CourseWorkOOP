@@ -3,19 +3,14 @@ package checkDate
 import (
 	resp "CourseWork/internal/lib/api/response"
 	"CourseWork/lib/logger/sl"
-	"CourseWork/lib/types"
 	"github.com/go-chi/render"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 type Request struct {
-	Year    int `json:"year"`
-	Month   int `json:"month"`
-	Day     int `json:"day"`
-	Hours   int `json:"hours"`
-	Minutes int `json:"minutes"`
-	Seconds int `json:"seconds"`
+	Date time.Time `json:"date"`
 }
 type Response struct {
 	Exists bool `json:"exists"`
@@ -23,7 +18,7 @@ type Response struct {
 }
 
 type DateCheker interface {
-	CheckDateTimeDB(date types.Date) (error, bool)
+	CheckDateTimeDB(date time.Time) (error, bool)
 }
 
 func New(log *slog.Logger, dateCheker DateCheker) http.HandlerFunc {
@@ -40,20 +35,16 @@ func New(log *slog.Logger, dateCheker DateCheker) http.HandlerFunc {
 		}
 		log.Info("Request body decoded", slog.Any("request", req))
 
-		var date = types.Date{
-			Year:    req.Year,
-			Month:   req.Month,
-			Day:     req.Day,
-			Hours:   req.Hours,
-			Minutes: req.Minutes,
-			Seconds: req.Seconds,
-		}
 		var exists bool
-		err, exists = dateCheker.CheckDateTimeDB(date)
+		err, exists = dateCheker.CheckDateTimeDB(req.Date)
 
 		if err != nil {
 			log.Error("failed to check date", sl.Err(err))
 			return
+		}
+
+		if exists {
+
 		}
 		render.JSON(w, r, Response{
 			Exists:   exists,

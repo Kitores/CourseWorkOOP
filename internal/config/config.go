@@ -39,7 +39,7 @@ func MustLoad() *Config {
 	//	log.Fatal("CONFIG_PATH environment variable not set")
 	//}
 
-	configPath := ""
+	configPath := "config/local.yaml"
 
 	// check if file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
