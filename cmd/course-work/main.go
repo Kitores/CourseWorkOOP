@@ -4,6 +4,7 @@ import (
 	"CourseWork/internal/config"
 	"CourseWork/internal/http-server/handlers/addAppointment"
 	"CourseWork/internal/http-server/handlers/checkDate"
+	"CourseWork/internal/http-server/handlers/getAppointments"
 	"CourseWork/internal/setupLogger"
 	"CourseWork/internal/storage/postgresql"
 	"CourseWork/lib/logger/sl"
@@ -18,10 +19,9 @@ import (
 
 func main() {
 	cfg := config.MustLoad()
-	//
 	fmt.Printf("%#v\n", cfg)
-	log := setupLogger.SetupLogger(cfg.Env)
 
+	log := setupLogger.SetupLogger(cfg.Env)
 	log.Info("starting server", slog.String("env", cfg.Env))
 	log.Debug("Debug logging enabled")
 
@@ -29,21 +29,8 @@ func main() {
 	storage, err := postgresql.NewPG(connStr)
 	fmt.Println(storage, err)
 	if err != nil {
-		//log.Fatalln("Failed to initialize storage: %v", err)
 		os.Exit(1)
 	}
-	//date := checkDate.Date{
-	//	Year:    2023,
-	//	Month:   10,
-	//	Day:     04,
-	//	Hours:   12,
-	//	Minutes: 00,
-	//	Seconds: 00,
-	//}
-	//err, _ = storage.CheckDateTimeDB(date)
-	//if err != nil {
-	//	fmt.Println(err)
-	//}
 
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
@@ -52,6 +39,8 @@ func main() {
 	router.Get("/checkDate", checkDate.New(log, storage))
 	//
 	router.Post("/newAppointment", addAppointment.New(log, storage))
+	//
+	router.Get("/getAppointments", getAppointments.New(log, storage))
 	//
 	log.Info("starting server", slog.String("address", cfg.Address))
 	//

@@ -9,12 +9,13 @@ from aiogram.filters import Command
 from aiogram import F
 from aiogram.fsm.context import FSMContext  # Исправленный импорт
 from aiogram.fsm.state import State, StatesGroup  # Исправленный импорт
+from datetime import datetime
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
 # Токен бота
-bot = Bot(token='')
+bot = Bot(token='token')
 dp = Dispatcher()
 
 # ID администратора
@@ -32,7 +33,7 @@ main_menu = ReplyKeyboardMarkup(
 # Кнопки для выбора услуг в прайс листе (с эмодзи)
 price_list_menu = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Психотравмы, доставшиеся от родителей 🤔")],
+        [KeyboardButton(text="Психотравмы от родителей 🤔")],
         [KeyboardButton(text="Ядро личности 😎")],
         [KeyboardButton(text="Сфера финансов 💸")],
         [KeyboardButton(text="Сфера любви ❤️")]
@@ -43,7 +44,7 @@ price_list_menu = ReplyKeyboardMarkup(
 # Кнопки для выбора услуг при записи на услугу (без эмодзи)
 booking_menu = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Психотравмы, доставшиеся от родителей")],
+        [KeyboardButton(text="Психотравмы от родителей")],
         [KeyboardButton(text="Ядро личности")],
         [KeyboardButton(text="Сфера финансов")],
         [KeyboardButton(text="Сфера любви")]
@@ -51,10 +52,10 @@ booking_menu = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# Кнопка для возвращения в главное меню
-back_button = KeyboardButton(text="Назад")
-back_menu = ReplyKeyboardMarkup(
-    keyboard=[[back_button]],
+# Кнопка "Меню" для завершения записи
+menu_button = KeyboardButton(text="Меню")
+menu_menu = ReplyKeyboardMarkup(
+    keyboard=[[menu_button]],
     resize_keyboard=True
 )
 
@@ -84,7 +85,7 @@ services_info = {
         "• Внешнее Я\n"
         "• Асцендент"
     ),
-    "Психотравмы, доставшиеся от родителей": (
+    "Психотравмы от родителей": (
         "Что именно досталось нам от родителей? В чем мой талант?\n"
         "• Психологические родители\n"
         "• Психотравмы\n"
@@ -95,14 +96,19 @@ services_info = {
 
 # Цены для каждой услуги
 prices = {
-    "Психотравмы, доставшиеся от родителей 🤔": "300 р.",
+    "Психотравмы от родителей 🤔": "300 р.",
     "Ядро личности 😎": "300 р.",
     "Сфера финансов 💸": "500 р.",
     "Сфера любви ❤️": "500 р."
 }
 
-# Регулярное выражение для проверки корректности данных
-birth_info_pattern = r"^(\d{2}:\d{2})\s+(\d{2}\.\d{2}\.\d{4})\s+([A-Za-zА-Яа-яЁё\s]+)$"
+# Регулярные выражения для даты и времени
+date_pattern = r"^\d{2}\.\d{2}\.\d{4}$"  # Дата: ДД.ММ.ГГГГ
+time_pattern = r"^(?P<time>\d{2}:\d{2})\s+(?P<lastname>[А-Яа-яЁё]+)\s+(?P<firstname>[А-Яа-яЁё]+)\s+(?P<midname>[А-Яа-яЁё]+)$"  # Время: ЧЧ:ММ
+menu_pattern = r"^Меню$"  # Проверка для кнопки "Меню"
+
+# Массив с доступными временными слотами
+available_times = ["12:00", "13:00", "16:00", "17:00"]
 
 # Кнопки для выбора формата
 response_menu = ReplyKeyboardMarkup(
@@ -113,10 +119,13 @@ response_menu = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# Создаём состояние для процесса записи на услугу
+# Создаем состояние для процесса записи на услугу
 class Form(StatesGroup):
     waiting_for_service = State()  # Ждём выбора услуги
     waiting_for_details = State()  # Ждём данные для конференции
+    waiting_for_date = State()  # Ждём дату для конференции
+    waiting_for_time = State()  # Ждём время для конференции
+
 
 
 # Обработчик команды /start
@@ -162,10 +171,11 @@ async def service_booking(message: types.Message):
 async def show_service_details(message: types.Message, state: FSMContext):
     service_name = message.text
     info = services_info.get(service_name)
+    await state.update_data(service_name=service_name)
     await message.reply(info, reply_markup=response_menu)
 
     # Переходим в состояние ожидания выбора формата
-    await Form.waiting_for_details.set()
+    await state.set_data(Form.waiting_for_details)
 
 
 # Обработчик "Ответ" или "Конференция"
@@ -173,68 +183,137 @@ async def show_service_details(message: types.Message, state: FSMContext):
 async def select_format(message: types.Message, state: FSMContext):
     if message.text == "Ответ":
         await message.reply("Вы выбрали формат *Ответ*. Спасибо за выбор! Мы приступаем к работе.", reply_markup=main_menu)
+
+        # # # Опционально
+
+        # user_data = await state.get_data()
+        # data = {
+        #     'date': '0001-01-01T00:00:00Z',
+        #     'firstName': str(message.from_user.full_name),
+        #     'midName': str(message.from_user.username),
+        #     'lastName': str(message.from_user.id),
+        #     'service': user_data.get("service_name"),
+        #     'online': False
+        #     }
+        # json_data = json.dumps(data)
+        # header = {
+        #     'Content-Type': 'application/json'
+        # }
+        # requests.post('http://localhost:8082/newAppointment', headers=header, data=json_data)
+
     elif message.text == "Конференция (доплата 500 р.)":
-        await message.reply("Вы выбрали формат *Конференция*. Пожалуйста, введите время, дату и место, чтобы я могла отправить их администратору.", reply_markup=back_menu)
+        # Отправляем сообщение с просьбой ввести дату
+        await message.reply("Вы выбрали формат *Конференция*. Пожалуйста, введите дату, когда вы хотите провести конференцию (формат - ДД.ММ.ГГГГ).", reply_markup=menu_menu)
+        # Переходим в состояние ожидания даты
+        await state.set_state(Form.waiting_for_date)
 
 
-# Обработчик данных для конференции
-@dp.message(lambda message: re.match(birth_info_pattern, message.text.strip()))
-async def handle_conference_data(message: types.Message):
-    match = re.match(birth_info_pattern, message.text.strip())
-    time, date, place = match.groups()
-
-    # Получаем тэг пользователя
-    user_tag = f"@{message.from_user.username}" if message.from_user.username else f"Пользователь {message.from_user.id}"
-
-    print(time)
-    # КАРОЧЕ ТУТ НАЧИНАЕТСЯ ОТПРАВКА ЗАПРОСА НА ПРОВЕРКУ ВРЕМЕНИ
-
-    data = {
-
-        'date': f'{date[6:]}-{date[3:5]}-{date[:2]}T{time}:00Z'
-	}
-    resp = {
-        'exists': '',
-    }
-    json_data = json.dumps(data)
-    print(json_data)
-
-    header = {
-        'Content-Type': 'application/json'
-    }
-    response = requests.get('http://localhost:8082/checkDate', headers=header, data=json_data)
-    exist = response.json().get("exists")
-    print(exist)
-
-    if exist == True:
-        # await bot.send_message(
-        # chat_id=MyID,
-        # text=f"📩 Извините, время занято!:\n\n"
-        # f"{time,}"
-        # )
-        await message.reply("📩 Извините, время занято!:\n\n", reply_markup=main_menu)
-    else:
-         # Отправляем администратору данные для конференции, включая тэг пользователя ЕСЛИ ВРЕМЯ СВОБОДНО
-        await bot.send_message(
-        chat_id=MyID,
-        text=f"📩 Новый запрос на конференцию:\n\n"
-             f"Время: {time}\nДата: {date}\nМесто: {place}\n"
-             f"Тэг пользователя: {user_tag}"
-             f"{resp}"
-
-        )
+# Обработчик получения даты (можно ввести как дату ДД.ММ.ГГГГ, так и время ЧЧ:ММ)
+@dp.message(F.text, Form.waiting_for_date)
+async def handle_conference_date(message: types.Message, state: FSMContext):
+    text = message.text.strip()
+    # Проверка формата ДД.ММ.ГГГГ
+    if re.match(date_pattern, text):
+        # Получаем введенную дату
+        date = text
+        parsed_date = datetime.strptime(date, "%d.%m.%Y")
+        formatted_date = parsed_date.strftime("%Y-%m-%d")
+        print(f"Дата для конференции: {date}")
 
         data = {
-            'year': int(date[6:]),
-            'month': int(date[3:5]),
-            'day': int(date[:2]),
-            'hours': int(time[:2]),
-            'minutes': int(time[3:]),
-            'seconds': 0,
-            'firstName': "isha",
-            'midName': "anov",
-            'lastName': "anovic",
-            'service': "tarro",
+            'date': f"{formatted_date}T00:00:00Z",
+            'limUp': f"{formatted_date}T12:00:00Z",
+            'limLow': f"{formatted_date}T18:00:00Z"
+            }
+        resp = {
+            'times': [],
+        }
+        json_data = json.dumps(data)
+        header = {
+            'Content-Type': 'application/json'
+        }
+        response = requests.get('http://localhost:8082/checkDate', headers=header, data=json_data)
+
+        respData = response.json().get('times')
+        possible_times = ["12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"]
+        times = ""
+        timesList = []
+        # for timestamp in respData:
+        #     output += f"{timestamp}\n"
+        print(respData)
+        if respData == None:
+            freeTimes = possible_times
+            print(freeTimes)
+        else:
+            for timestamp in respData:
+                time_part = timestamp.split('T')[1][:5]  # Извлекаем время и оставляем первые 5 символов (часы и минуты)
+                timesList.append(time_part)
+                times += time_part
+                # times += f"{time_part}\n"
+
+            freeTimes = possible_times
+            print(times)
+            for time in timesList:
+                if time in possible_times:
+                    freeTimes.remove(time)
+            print(freeTimes)
+
+        if len(freeTimes) != 0:
+            # Сохраняем дату в состояние для дальнейшего использования
+            await state.update_data(date=date)
+
+            # Создаем строку с доступными временами
+            time_options = "\n".join(freeTimes)
+
+            # Запрашиваем у пользователя выбрать время
+            await message.reply(f"Вы выбрали дату: {date}. Теперь выберите время из доступных:\n{time_options}\n и введите в формате \"ЧЧ:ММ Фамилия Имя Отчество\"", reply_markup=menu_menu)
+
+            # Переходим в состояние ожидания времени
+            await state.set_state(Form.waiting_for_time)
+        else:
+            await message.reply("Извините, но на выбранную вами дату нет свободных мест", reply_markup=menu_menu)
+
+    elif re.match(menu_pattern, text):
+        await message.reply("Вы вернулись в главное меню.", reply_markup=main_menu)
+
+    else:
+        # Если формат неверный
+        await message.reply("Неверный формат. Пожалуйста, введите дату в формате ДД.ММ.ГГГГ", reply_markup=menu_menu)
+
+# Обработчик получения времени время ЧЧ:ММ
+@dp.message(F.text, Form.waiting_for_time)
+async def handle_conference_time(message: types.Message, state: FSMContext):
+    # Проверка формата ЧЧ:ММ (время)
+    text = message.text.strip()
+    match = re.match(time_pattern, message.text.strip())
+    print(match)
+    if match:
+        time, lastname, firstname, midname = match.group('time', 'midname', 'firstname', 'lastname')
+        print(time)
+        print(lastname)
+        print(firstname)
+        print(midname)
+        selected_time = time
+
+        # print(f"Вы выбрали время: {selected_time}, {name}")s
+
+        # Получаем дату из состояния
+        user_data = await state.get_data()
+        date = user_data.get("date")
+        parsed_date = datetime.strptime(date, "%d.%m.%Y")
+        formatted_date = parsed_date.strftime("%Y-%m-%d")
+        timeUTC = f"{formatted_date}T{time}:00Z"
+        service_name = user_data.get("service_name")
+
+        # Подтверждаем выбор времени и даты
+        await message.reply(f"Вы выбрали время: {selected_time} на {date}. Мы продолжаем {firstname} {midname} {lastname}", reply_markup=menu_menu)
+
+        data = {
+            'date': timeUTC,
+            'firstName': firstname,
+            'midName': midname,
+            'lastName': lastname,
+            'service': service_name,
             'online': True
             }
         # resp = {
@@ -247,19 +326,59 @@ async def handle_conference_data(message: types.Message):
             'Content-Type': 'application/json'
         }
         response = requests.post('http://localhost:8082/newAppointment', headers=header, data=json_data)
-        # exist = response.json().get("exists")
-        # Подтверждение пользователю
-        await message.reply("Ваши данные были отправлены администратору! Мы свяжемся с вами для дальнейших шагов.", reply_markup=main_menu)
+                # Отправляем информацию администратору
+        user_account_info = f"Новая запись:\n" \
+                            f"Пользователь: {message.from_user.full_name}\n" \
+                            f"Username: @{message.from_user.username}\n" \
+                            f"ID: {message.from_user.id}\n" \
+                            f"Услуга: {service_name}\n" \
+                            f"Дата: {date}\n" \
+                            f"Время: {selected_time}"
+
+        # Отправляем информацию администратору
+        await bot.send_message(MyID, user_account_info)
+        await state.clear()
+        # Закрываем состояние, так как процесс завершен
+    elif re.match(menu_pattern, text):
+        await message.reply("Вы вернулись в главное меню.", reply_markup=main_menu)
+    else:
+        # Если формат неверный
+        await message.reply("Неверный формат. Пожалуйста, время в формате ЧЧ:ММ.", reply_markup=menu_menu)
 
 
 
 
 
-# Завершаем процесс в случае, если пользователь готов
-@dp.message(F.text == "Назад")
-async def go_back(message: types.Message):
-    # Возвращаем в главное меню
-    await message.reply("Вы в главном меню.", reply_markup=main_menu)
+# Обработчик кнопки "Меню"
+@dp.message(F.text == "Меню")
+async def go_to_menu(message: types.Message):
+    await message.reply("Вы вернулись в главное меню.", reply_markup=main_menu)
+
+# Обработчик команды /appointments
+@dp.message(Command("appointments"))
+async def start_command(message: types.Message):
+
+    data = {}
+    json_data = json.dumps(data)
+    header = {
+        'Content-Type': 'application/json'
+    }
+    response = requests.get('http://localhost:8082/getAppointments', headers=header, data=json_data)
+
+    respData = response.json().get('appointments')
+
+    # Перебираем пользователей и формируем строки
+    results = []
+    for user in respData:
+        lines = []
+        for key, value in user.items():
+            lines.append(f'{key}: {value}')
+        results.append('\n'.join(lines))
+
+    # Объединяем строки для всех пользователей с разделителем '\n\n'
+    final_result = '\n\n'.join(results)
+    await bot.send_message(MyID, final_result)
+
 
 
 async def main():

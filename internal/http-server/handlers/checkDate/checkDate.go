@@ -10,15 +10,17 @@ import (
 )
 
 type Request struct {
-	Date time.Time `json:"date"`
+	Date   time.Time `json:"date"`
+	LimUp  time.Time `json:"limUp"`
+	LimLow time.Time `json:"limLow"`
 }
 type Response struct {
-	Exists bool `json:"exists"`
+	Times []time.Time `json:"times"`
 	resp.Response
 }
 
 type DateCheker interface {
-	CheckDateTimeDB(date time.Time) (error, bool)
+	CheckDateTimeDB(limitUp, limitLow time.Time, date time.Time) (error, []time.Time)
 }
 
 func New(log *slog.Logger, dateCheker DateCheker) http.HandlerFunc {
@@ -35,19 +37,16 @@ func New(log *slog.Logger, dateCheker DateCheker) http.HandlerFunc {
 		}
 		log.Info("Request body decoded", slog.Any("request", req))
 
-		var exists bool
-		err, exists = dateCheker.CheckDateTimeDB(req.Date)
+		var times []time.Time
+		err, times = dateCheker.CheckDateTimeDB(req.LimUp, req.LimLow, req.Date)
 
 		if err != nil {
 			log.Error("failed to check date", sl.Err(err))
 			return
 		}
 
-		if exists {
-
-		}
 		render.JSON(w, r, Response{
-			Exists:   exists,
+			Times:    times,
 			Response: resp.OK(),
 		})
 		//log.Info(fmt.Sprintf("Saved URL %s, row id %d", slog.String("url", url), id))
